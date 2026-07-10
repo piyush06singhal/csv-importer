@@ -127,6 +127,42 @@ function VirtualizedTable({ records }: { records: LeadRecord[] }) {
   );
 }
 
+// Utility: converts mapped LeadRecord array to downloadable CSV file
+function downloadCSV(records: LeadRecord[], filename = 'mapped_leads.csv') {
+  const headers = [
+    'Name', 'Email', 'Country Code', 'Mobile', 'Company',
+    'City', 'State', 'Country', 'Lead Owner', 'CRM Status',
+    'CRM Note', 'Data Source', 'Possession Time', 'Description',
+  ];
+  const rows = records.map((r) => [
+    r.name ?? '',
+    r.email ?? '',
+    r.country_code ?? '',
+    r.mobile_without_country_code ?? '',
+    r.company ?? '',
+    r.city ?? '',
+    r.state ?? '',
+    r.country ?? '',
+    r.lead_owner ?? '',
+    r.crm_status ?? '',
+    r.crm_note ?? '',
+    r.data_source ?? '',
+    r.possession_time ?? '',
+    r.description ?? '',
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
+
+  const csvContent = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function Home() {
   const {
     status,
@@ -397,20 +433,28 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-slate-100">Import Metrics Dashboard</h2>
                 <p className="text-xs text-slate-500">Leads parsing completed successfully.</p>
               </div>
-              <button
-                onClick={resetImport}
-                className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-semibold transition-all text-slate-200 border border-slate-700 flex items-center gap-2 self-start sm:self-center focus:ring-2 focus:ring-slate-500 outline-none"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                  />
-                </svg>
-                Import Another File
-              </button>
+              <div className="flex gap-3 self-start sm:self-center flex-wrap">
+                <button
+                  id="download-csv-btn"
+                  onClick={() => downloadCSV(result.records)}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 active:scale-95 text-sm font-semibold transition-all text-emerald-400 border border-emerald-500/30 flex items-center gap-2 focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download CSV
+                </button>
+                <button
+                  id="import-another-btn"
+                  onClick={resetImport}
+                  className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-sm font-semibold transition-all text-slate-200 border border-slate-700 flex items-center gap-2 focus:ring-2 focus:ring-slate-500 outline-none"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Import Another File
+                </button>
+              </div>
             </div>
 
             {/* Metrics cards grid */}
