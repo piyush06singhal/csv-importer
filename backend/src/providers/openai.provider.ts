@@ -46,7 +46,7 @@ export class OpenAIProvider implements LLMProvider {
     const userPrompt = this.promptBuilder.buildUserPrompt(rows, headers);
 
     try {
-      const modelName = this.isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+      const modelName = this.isGroq ? 'llama-3.1-8b-instant' : 'gpt-4o-mini';
 
       const chatParams: any = {
         model: modelName,

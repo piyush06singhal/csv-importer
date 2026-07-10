@@ -60,8 +60,12 @@ export class ImportController {
 
       sendProgress('Preparing AI Batches...', 15);
 
-      // 3. Batch processing (default size = 25, retry count = 3)
-      const batchProcessor = new BatchProcessor(25, 3);
+      // 3. Batch processing — use smaller batches for Groq free tier (10 rows)
+      // to avoid hitting the 6000 TPM (tokens-per-minute) rate limit.
+      // OpenAI can handle larger batches of 25 rows without issue.
+      const isGroqKey = (process.env.OPENAI_API_KEY || '').startsWith('gsk_');
+      const batchSize = isGroqKey ? 10 : 25;
+      const batchProcessor = new BatchProcessor(batchSize, 3);
       const batchResult = await batchProcessor.process(
         rows,
         headers,
