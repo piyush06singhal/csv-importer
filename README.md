@@ -1,213 +1,361 @@
 # GrowEasy AI-Powered CSV CRM Importer
 
-An intelligent, full-stack, stateless web application designed to map arbitrary CSV lead lists directly to standardized CRM field mappings using LLM semantic matching, runtime Zod verification, and data normalization.
+An intelligent, full-stack, stateless web application that maps arbitrary CSV lead lists to standardised CRM fields using LLM semantic matching, runtime Zod validation, and data normalisation.
+
+🌐 **Live Demo**: [csv-importer-frontend-zeta.vercel.app](https://csv-importer-frontend-zeta.vercel.app)  
+🔌 **Backend API**: [groweasy-crm-importer-api.onrender.com](https://groweasy-crm-importer-api.onrender.com)
 
 ---
 
 ## 🎨 Key Features
 
-- **Drag & Drop File Upload**: Dynamic browser drop zone with file type and size validations.
-- **Client-Side CSV Previews**: Parses and lists the first 10 rows in a scrollable preview table before backend ingestion.
-- **Dynamic Delimiter Autodetection**: Counts separator occurrences (`,` vs `;`) on the first line to parse files correctly.
-- **Simulated Progress Trackers**: Displays progress statements (Uploading, AI Extraction, Validation) to preserve UI responsiveness.
-- **Chunked Batching Loop**: Segments large files into chunks of 25 rows to conform to rate-limiting and context window parameters.
-- **Exponential Retry Backoff**: Mitigates transient LLM rate-limit failures, retrying up to 3 times before routing rows to skipped metrics.
-- **CRM Normalizers**: Cleanups for dates, emails, country prefix dialing codes, and semantic mapping of CRM statuses/sources.
-- **Collapsible Warnings List**: Excel-aligned coordinate indexing mapping validation/LLM failures to row numbers with interactive JSON viewers.
-- **Premium SaaS Dark Theme**: A responsive Dark-theme-first dashboard using Glassmorphism cards and smooth transitions.
+| Feature | Description |
+|---|---|
+| **Drag & Drop Upload** | Browser drop zone with file-type and size validation |
+| **CSV Preview** | Parses and displays first 10 rows before processing |
+| **Auto Delimiter Detection** | Counts `,` vs `;` occurrences to auto-detect separator |
+| **AI Column Mapping** | LLM maps arbitrary headers to 14 standard CRM fields |
+| **Dual AI Provider** | Auto-detects Groq (`gsk_`) or OpenAI (`sk-`) keys — no code changes needed |
+| **Semantic Status Normalisation** | Maps `"interested"` → `GOOD_LEAD_FOLLOW_UP`, `"won"` → `SALE_DONE`, etc. |
+| **Phone Number Splitting** | Extracts `country_code` and `mobile_without_country_code` automatically |
+| **Streaming Progress** | Real-time NDJSON progress updates during batch processing |
+| **Smart Batch Sizing** | 10 rows/batch for Groq free tier, 25 rows/batch for OpenAI |
+| **Exponential Backoff Retries** | Retries transient failures up to 3× with 3s → 6s → 12s delays |
+| **Zod Validation** | Validates every AI-mapped record against a strict CRM schema |
+| **Skipped Records Panel** | Collapsible rows with exact validation failure reasons and raw data |
+| **Import Metrics Dashboard** | Total records, imported leads, skipped rows, processing speed, batch stats |
+| **Download CSV Export** | One-click download of all successfully mapped leads as a clean CSV |
+| **Prompt Injection Defense** | Strips `=`, `+`, `-`, `@` operators from raw cell values |
+| **Formula Injection Mitigation** | Prevents Excel macro triggers in downstream exports |
+| **Virtualized Table** | High-performance rendering for large result sets |
+| **Premium Dark Theme** | Glassmorphism cards, gradient typography, smooth micro-animations |
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ Architecture
 
 ```
                        [Sales Operator (User)]
                                   │
-                                  ▼ (Next.js SPA Interface)
-                      [Frontend Next.js Client]
+                                  ▼  Drag & Drop CSV
+                      [Frontend — Next.js on Vercel]
                                   │
-                                  ▼ (POST /api/import - Multipart Upload)
-                       [Express Backend Server]
+                                  ▼  POST /api/import (multipart/form-data)
+                       [Backend — Express on Render]
                                   │
-       ┌──────────────────────────┼──────────────────────────┐
-       ▼ (Parser Stream)          ▼ (Batch Processor Loops)  ▼ (Field Norms / Zod)
-[csv-parser & Delimiters]  [LLMProvider (OpenAIProvider)] [ValidationService]
+          ┌───────────────────────┼──────────────────────┐
+          ▼                       ▼                      ▼
+  [CSVService]          [BatchProcessor]        [ValidationService]
+  Auto-detects          10 or 25 rows/          Zod schema checks
+  delimiter             batch → LLM             email+phone rules
                                   │
-                                  ▼
-                             OpenAI APIs
+                    ┌─────────────┴─────────────┐
+                    ▼ gsk_ key                  ▼ sk- key
+             [Groq API]                   [OpenAI API]
+         llama-3.1-8b-instant            gpt-4o-mini
+           500K TPD free tier
 ```
 
 ---
 
 ## 📂 Project Structure
 
-This monorepo uses `npm workspaces` to orchestrate services:
-
 ```
-├── shared/                       # Data schemas, Zod rules, and typescript types
-├── backend/                      # Node.js + Express REST API server
-├── frontend/                     # Next.js App Router SPA dashboard
-├── docker/                       # Development & Production Dockers
-└── docker-compose.yml            # Multi-service container compositor
+csv-importer/
+├── shared/                     # Zod schemas, TypeScript types (LeadRecord, SkippedRecord)
+│   └── src/
+│       └── index.ts
+├── backend/                    # Node.js + Express REST API
+│   ├── src/
+│   │   ├── config/             # env.config.ts — validated environment variables
+│   │   ├── controllers/        # import.controller.ts, health.controller.ts
+│   │   ├── middlewares/        # error.middleware.ts, upload.middleware.ts
+│   │   ├── prompts/            # prompt-builder.ts — system + user prompt templates
+│   │   ├── providers/          # openai.provider.ts — Groq/OpenAI dual-routing
+│   │   ├── routes/             # health.routes.ts, import.routes.ts, swagger.routes.ts
+│   │   ├── services/           # batch-processor.ts, csv.service.ts, validation.service.ts
+│   │   └── utils/              # errors.ts, logger.ts, normalizers.ts
+│   └── tests/                  # Jest + Supertest unit and integration tests
+├── frontend/                   # Next.js 14 App Router SPA
+│   ├── src/
+│   │   ├── app/                # page.tsx — full UI, layout.tsx, globals.css
+│   │   ├── hooks/              # useCSVImport.ts — streaming state machine
+│   │   └── services/           # importService.ts — NDJSON stream reader
+│   └── tests/                  # Vitest + Testing Library UI flow tests
+├── demo_leads.csv              # 5-row quick demo file
+├── demo_leads_excel.csv        # 200-row comprehensive test dataset
+├── docker-compose.yml          # Multi-service container orchestration
+└── README.md
 ```
 
 ---
 
 ## ⚙️ Environment Variables
 
-### Backend Configuration (`backend/.env`)
-- `PORT` (Default: `5000`): Port binding of the API server.
-- `NODE_ENV` (Default: `development`): Environment mode (`development`, `production`, `test`).
-- `OPENAI_API_KEY` (Required): Secret key for invoking OpenAI models.
-- `ALLOWED_ORIGIN` (Default: `http://localhost:3000`): Client CORS request origin.
+### Backend (`backend/.env`)
 
-### Frontend Configuration (`frontend/.env`)
-- `NEXT_PUBLIC_API_URL` (Default: `http://localhost:5000`): Ingestion server HTTP URL.
+```env
+PORT=5000
+NODE_ENV=development
+OPENAI_API_KEY=your_key_here        # Groq key (gsk_...) OR OpenAI key (sk-...) — auto-detected
+ALLOWED_ORIGIN=http://localhost:3000
+```
+
+> **Note on `OPENAI_API_KEY`**: Despite the variable name, you can put **either** a Groq API key (`gsk_...`) **or** an OpenAI API key (`sk-...`) here. The app auto-detects the provider from the key prefix.
+
+### Frontend (`frontend/.env.local`)
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
 
 ---
 
-## 🚀 Local Installation
+## 🚀 Local Development Setup
 
 ### Prerequisites
-- Node.js (v20+)
-- npm (v10+)
-- An OpenAI API Key
+- **Node.js** v20+
+- **npm** v10+
+- A **Groq API Key** (free at [console.groq.com](https://console.groq.com/keys)) **or** an OpenAI API Key
 
-### 1. Install Workspace Dependencies
-Installs packages across workspaces and establishes symlinks:
+### Step 1 — Clone & Install
+
 ```bash
+git clone https://github.com/piyush06singhal/csv-importer.git
+cd csv-importer
 npm install
 ```
 
-### 2. Compile Shared Package
-Builds typescript type files for shared contracts:
+### Step 2 — Configure Environment
+
+```bash
+# Backend
+cp backend/.env.example backend/.env
+# Edit backend/.env and set OPENAI_API_KEY to your Groq or OpenAI key
+
+# Frontend
+cp frontend/.env.example frontend/.env.local
+# NEXT_PUBLIC_API_URL defaults to http://localhost:5000 — no change needed for local dev
+```
+
+### Step 3 — Build Shared Types
+
 ```bash
 npm run build:shared
 ```
 
-### 3. Running Development Servers
-Starts the backend and frontend servers in watch mode:
+### Step 4 — Start Development Servers
+
 ```bash
-# Start backend (Port 5000)
+# Terminal 1 — Backend API (http://localhost:5000)
 npm run dev:backend
 
-# Start frontend (Port 3000)
+# Terminal 2 — Frontend UI (http://localhost:3000)
 npm run dev:frontend
 ```
 
 ---
 
-## 🐳 Docker Container Orchestration
+## 🐳 Docker Compose
 
-A single command builds and coordinates both application layers:
+Builds and runs both services in containers with a single command:
 
 ```bash
-# Set OpenAI API key in your shell
-export OPENAI_API_KEY="your-api-key"
+# Set your API key
+export OPENAI_API_KEY="gsk_your_groq_key_here"
 
-# Orchestrate containers
+# Start both services
 docker-compose up --build
 ```
-- Client dashboard: `http://localhost:3000`
-- REST API server: `http://localhost:5000`
+
+- **Frontend**: `http://localhost:3000`
+- **Backend API**: `http://localhost:5000`
+- **Swagger Docs**: `http://localhost:5000/api/docs`
 
 ---
 
-## 🧪 Testing Suites
+## 🧪 Running Tests
 
-Run all validation schemas, CSV parsers, prompt builders, normalizers, and client-side view states:
+```bash
+# Run all tests across all workspaces (37 tests)
+npm test
 
-- **Monorepo Global Test**:
-  ```bash
-  npm test
-  ```
-- **Backend Tests (Jest + Supertest)**:
-  ```bash
-  npm run test:backend
-  ```
-- **Frontend Tests (Vitest + JSDOM)**:
-  ```bash
-  npm run test:frontend
-  ```
+# Backend only (Jest + Supertest)
+npm run test:backend
+
+# Frontend only (Vitest + Testing Library)
+npm run test:frontend
+```
+
+**Test Coverage:**
+- ✅ CSV parsing (delimiter detection, empty rows, malformed data)
+- ✅ Validation service (Zod schema enforcement, skipped record routing)
+- ✅ Prompt builder (injection defence, JSON structure)
+- ✅ Normalizers (phone splitting, status mapping, date parsing)
+- ✅ Import integration (full pipeline with mocked LLM)
+- ✅ Frontend UI flows (upload, progress, results, error states)
 
 ---
 
-## 📡 API Documentation
+## 📡 API Reference
 
 ### `GET /health`
-Validates environment parameters and database configurations.
 
-**Response (200 OK)**:
+Returns service health status and environment configuration.
+
+**Response:**
 ```json
 {
   "status": "healthy",
   "timestamp": "2026-07-10T12:00:00.000Z",
+  "uptime": 3600,
   "services": {
-    "openai_api": "configured"
+    "ai_provider": "configured",
+    "provider_type": "groq"
   }
 }
 ```
 
 ### `POST /api/import`
-Accepts a multipart CSV form payload, runs AI maps, Normalizes, validates schemas, and builds ingestion packages.
 
-**Payload**:
-- `file` (Multipart Form File): CSV sheet.
+Accepts a multipart CSV upload, runs AI mapping, validates, and streams results as NDJSON.
 
-**Response (200 OK)**:
+**Request:**
+- `Content-Type: multipart/form-data`
+- `file`: CSV file (max 250 rows, `.csv` extension required)
+
+**Streaming Response (NDJSON):**
+
+Progress chunks (emitted during processing):
+```json
+{"type": "progress", "stage": "Processing Batch 2/5", "percent": 43}
+```
+
+Final result chunk:
 ```json
 {
-  "success": true,
-  "metadata": {
-    "total_records": 100,
-    "imported_records": 90,
-    "skipped_records": 10,
-    "processing_time_ms": 1420,
-    "batch_count": 4
-  },
-  "records": [
-    {
-      "created_at": "2026-07-10T13:00:00.000Z",
-      "name": "Jane Doe",
-      "email": "jane@example.com",
-      "country_code": "91",
-      "mobile_without_country_code": "9876543210",
-      "company": "Growth Inc",
-      "crm_status": "GOOD_LEAD_FOLLOW_UP",
-      "data_source": "eden_park",
-      "description": "Interested buyer."
-    }
-  ],
-  "skipped": [
-    {
-      "row_index": 12,
-      "raw_data": { "Name": "Broken Data" },
-      "reason": "Record lacks both email address and mobile number. At least one is required."
-    }
-  ]
+  "type": "result",
+  "data": {
+    "success": true,
+    "metadata": {
+      "total_records": 5,
+      "imported_records": 4,
+      "skipped_records": 1,
+      "processing_time_ms": 1521,
+      "batch_count": 1,
+      "failed_batches": 0,
+      "retry_count": 0,
+      "avg_batch_time_ms": 1521
+    },
+    "records": [
+      {
+        "name": "Bruce Wayne",
+        "email": "bruce@wayne.com",
+        "country_code": "1",
+        "mobile_without_country_code": "5550199",
+        "company": "Wayne Enterprises",
+        "city": "Gotham",
+        "lead_owner": "James Gordon",
+        "crm_status": "GOOD_LEAD_FOLLOW_UP",
+        "data_source": "eden_park",
+        "possession_time": "Within 6 months",
+        "description": "Wants follow-up on property plots."
+      }
+    ],
+    "skipped": [
+      {
+        "row_index": 6,
+        "raw_data": {"First Name": "Arthur", "Last Name": "Curry"},
+        "reason": "Record lacks both email address and mobile number."
+      }
+    ]
+  }
 }
 ```
 
+**Swagger UI**: Available at `/api/docs` when running locally.
+
 ---
 
-## ☁️ Deployment Guidelines
+## ☁️ Deployment
 
-### Backend Ingestion Server (Render)
-1. Set up a **Web Service** on Render.
-2. Build command:
+### Backend → Render
+
+1. Create a **Web Service** on [render.com](https://render.com)
+2. Connect your GitHub repo
+3. Set **Root Directory**: `./` (monorepo root)
+4. **Build Command**:
    ```bash
    npm install && npm run build -w shared && npm run build -w backend
    ```
-3. Start command:
+5. **Start Command**:
    ```bash
    npm start -w backend
    ```
-4. Define Env variables: `OPENAI_API_KEY`, `ALLOWED_ORIGIN` (Points to Vercel client URL), `NODE_ENV=production`.
+6. **Environment Variables** (in Render dashboard → Environment tab):
 
-### Frontend Client (Vercel)
-1. Add a project on Vercel importing the repository.
-2. Select root directory: `./`
-3. Configure Build Settings:
-   - Build command: `npm run build -w frontend`
-   - Output directory: `frontend/.next`
-4. Define Env variables: `NEXT_PUBLIC_API_URL` (Points to Render server URL).
+   | Key | Value |
+   |---|---|
+   | `OPENAI_API_KEY` | Your Groq key (`gsk_...`) or OpenAI key (`sk-...`) |
+   | `ALLOWED_ORIGIN` | Your Vercel frontend URL (e.g. `https://csv-importer-frontend-zeta.vercel.app`) |
+   | `NODE_ENV` | `production` |
+
+### Frontend → Vercel
+
+1. Import the GitHub repo on [vercel.com](https://vercel.com)
+2. **Framework Preset**: Next.js (auto-detected)
+3. **Root Directory**: `./` (monorepo root)
+4. **Build Command**: `npm run build -w frontend`
+5. **Output Directory**: `frontend/.next`
+6. **Environment Variable**:
+
+   | Key | Value |
+   |---|---|
+   | `NEXT_PUBLIC_API_URL` | Your Render backend URL (e.g. `https://groweasy-crm-importer-api.onrender.com`) |
+
+---
+
+## 🧪 Test Dataset
+
+A ready-to-use demo file is included in the repository root:
+
+| File | Rows | Purpose |
+|---|---|---|
+| `demo_leads.csv` | 5 rows | Quick smoke test (processes in ~1.5s) |
+| `demo_leads_excel.csv` | 200 rows | Full stress test with international leads, split names, edge cases |
+
+**Features tested by `demo_leads_excel.csv`:**
+- Split `First Name` / `Last Name` columns → AI concatenates to `name`
+- International phone formats (`+91`, `+1`, `+44`, `+86`, `+966`)
+- Semantic status mapping (`interested`, `won`, `callback`, `no answer`)
+- Missing email rows → partial validation
+- Missing phone rows → partial validation  
+- Rows with neither email nor phone → routed to skipped records
+
+---
+
+## 🔐 Security
+
+- All secrets loaded via environment variables — never hardcoded
+- `.env` files are listed in `.gitignore`
+- CORS restricted to the configured `ALLOWED_ORIGIN` only
+- File uploads restricted to `.csv` MIME type
+- Prompt injection mitigation in AI system prompt
+- Formula injection stripping (`=`, `+`, `-`, `@` prefixes removed from cell values)
+- Security headers: `X-Frame-Options`, `X-Content-Type-Options`, `Strict-Transport-Security`
+
+---
+
+## 📦 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind-free Vanilla CSS |
+| **Backend** | Node.js, Express 4, TypeScript |
+| **AI Providers** | Groq (`llama-3.1-8b-instant`) / OpenAI (`gpt-4o-mini`) |
+| **Validation** | Zod |
+| **CSV Parsing** | csv-parser |
+| **Testing** | Jest, Supertest, Vitest, Testing Library |
+| **Deployment** | Vercel (frontend), Render (backend) |
+| **Containerisation** | Docker, Docker Compose |
+| **Monorepo** | npm workspaces |
