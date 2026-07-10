@@ -52,6 +52,11 @@ export class ImportController {
       if (rows.length === 0) {
         throw new ValidationError('Uploaded CSV file contains no data rows.');
       }
+      if (rows.length > 250) {
+        throw new ValidationError(
+          `Uploaded CSV file contains ${rows.length} rows, which exceeds the maximum limit of 250 rows. Please segment your file and try again.`
+        );
+      }
 
       sendProgress('Preparing AI Batches...', 15);
 

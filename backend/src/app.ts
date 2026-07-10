@@ -10,9 +10,12 @@ import { errorMiddleware } from './middlewares/error.middleware.js';
 const app = express();
 
 // Configure CORS
+const allowedOrigin = env.ALLOWED_ORIGIN;
+const cleanOrigin = allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin;
+
 app.use(
   cors({
-    origin: env.ALLOWED_ORIGIN,
+    origin: [cleanOrigin, `${cleanOrigin}/`],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
